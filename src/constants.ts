@@ -1,5 +1,6 @@
 import { Movie, HeroContent } from '@/src/types';
 
+
 export const INITIAL_MOVIES: Movie[] = [
   {
     id: '1',
