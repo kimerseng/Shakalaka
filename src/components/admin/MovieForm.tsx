@@ -84,7 +84,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
         method: 'POST',
         body: file,
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.error || 'Upload failed');
