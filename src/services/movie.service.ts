@@ -1,80 +1,95 @@
-import { pool } from "@/src/lib/db";
+import prisma from "@/src/lib/prisma";
+import { Prisma } from "@prisma/client";
+
+const ALLOWED_FIELDS = [
+  "title",
+  "duration",
+  "type",
+  "subtitle",
+  "poster",
+  "posterUrl",
+  "year",
+];
+
+function pickAllowed(data: any) {
+  const out: any = {};
+  for (const k of ALLOWED_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(data, k)) {
+      out[k] = data[k];
+    }
+  }
+  // If frontend sent posterUrl (data URL), always map it to poster (DB column)
+  // prefer posterUrl over poster so uploaded image data is used as-is.
+  if (Object.prototype.hasOwnProperty.call(out, 'posterUrl')) {
+    out.poster = out.posterUrl;
+    delete out.posterUrl;
+  }
+
+  // Normalize poster: if explicitly undefined, remove the key so Prisma uses default/null
+  if (out.poster === undefined) delete out.poster;
+
+  return out;
+}
 
 export const movieService = {
+  async getMovies(filters?: any) {
+    const where: any = {};
+    if (filters?.type) where.type = filters.type;
+    if (filters?.search)
+      where.title = { contains: filters.search, mode: "insensitive" };
 
-  // Get all movies
-  async getMovies() {
-    const result = await pool.query(
-      "SELECT * FROM movie ORDER BY id DESC"
-    );
-    return result.rows;
+    return await prisma.movie.findMany({
+      where,
+      orderBy: { id: "desc" },
+    });
   },
 
-  // Search movies
-  async searchMovies(search: string) {
-    if (!search) {
-      const result = await pool.query(
-        "SELECT * FROM movie ORDER BY id DESC"
-      );
-      return result.rows;
-    }
-
-    const result = await pool.query(
-      `SELECT * FROM movie
-       WHERE LOWER(title) LIKE LOWER($1)
-       ORDER BY id DESC`,
-      [`%${search}%`]
-    );
-
-    return result.rows;
+  async getMovieById(id: number) {
+  return await prisma.movie.findUnique({ where: { id: id as any } });
   },
 
-  // Create movie
   async createMovie(data: any) {
-    const { title, duration, type, subtitle, videoUrl } = data;
-    // accept either poster or posterUrl from client
-    const poster = data.poster ?? data.posterUrl ?? null;
+    try {
+      console.log("service.createMovie payload (raw):", data);
+      const payload: any = pickAllowed(data);
+      console.log("service.createMovie payload (processed):", payload);
+      if (payload.year !== undefined && payload.year !== null)
+        payload.year = Number(payload.year);
 
-    const result = await pool.query(
-      `INSERT INTO movie (title, duration, type, subtitle, "videoUrl", poster)
-       VALUES ($1,$2,$3,$4,$5,$6)
-       RETURNING *`,
-      [title, duration, type, subtitle, videoUrl, poster]
-    );
-
-    return result.rows[0];
-  },
-
-  // Update movie
-  async updateMovie(id: string | number, data: any) {
-    const { title, duration, type, subtitle, videoUrl } = data;
-    const poster = data.poster ?? data.posterUrl ?? null;
-
-  if (!id) throw new Error("Movie ID is missing");
-
-    const result = await pool.query(
-      `UPDATE movie
-       SET title=$1,
-           duration=$2,
-           type=$3,
-           subtitle=$4,
-           "videoUrl"=$5,
-           poster=$6
-       WHERE id=$7
-       RETURNING *`,
-      [title, duration, type, subtitle, videoUrl, poster, id]
-    );
-
-    if (result.rows.length === 0) {
-      throw new Error(`Movie with id=${id} not found`);
+      const created = await prisma.movie.create({ data: payload });
+      console.log("service.createMovie created:", created);
+      return created;
+    } catch (err) {
+      console.error("service.createMovie error:", err);
+      throw err;
     }
-
-    return result.rows[0];
   },
 
-  // Delete movie
-  async deleteMovie(id: string | number) {
-    await pool.query("DELETE FROM movie WHERE id=$1", [id]);
+  async updateMovie(id: number, data: any) {
+    const payload: any = pickAllowed(data);
+    if (payload.year !== undefined && payload.year !== null)
+      payload.year = Number(payload.year);
+
+    try {
+  return await prisma.movie.update({ where: { id: id as any }, data: payload });
+    } catch (err) {
+      // Return null when record not found, keep other errors bubbling
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+        return null;
+      }
+      throw err;
+    }
   },
 
+  async deleteMovie(id: number) {
+    try {
+  await prisma.movie.delete({ where: { id: id as any } });
+      return true;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+        return false;
+      }
+      throw err;
+    }
+  },
 };

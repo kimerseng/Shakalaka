@@ -14,11 +14,15 @@ const Navbar = ({ onSearch, initialQuery = "" }: NavbarProps) => {
   const pathname = usePathname();
   const [query, setQuery] = useState(initialQuery);
 
-  // If user clears input or types, trigger search automatically
+  // If user types, call onSearch after a short debounce to avoid spamming
   useEffect(() => {
-    if (onSearch) {
-      onSearch(query);
-    }
+    if (!onSearch) return;
+
+    const id = setTimeout(() => {
+      onSearch(query.trim());
+    }, 400);
+
+    return () => clearTimeout(id);
   }, [query, onSearch]); // include onSearch in dependencies
 
   const handleSubmit = (e: React.FormEvent) => {

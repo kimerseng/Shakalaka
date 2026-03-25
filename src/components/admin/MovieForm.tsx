@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { Movie, SubtitleLanguage } from '@/src/types';
 import { MOVIE_TYPES } from '@/src/constants';
+import { compressImage } from '@/src/lib/image';
 
 interface MovieFormProps {
   movie?: Movie;
@@ -26,6 +27,7 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(movie?.posterUrl ?? null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,18 +35,69 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     setError(null);
 
     // Validate required fields
-    if (!formData.title || !formData.duration || !formData.type || !formData.posterUrl || !formData.year) {
+    if (!formData.title || !formData.duration || !formData.type || !formData.year) {
       setError('Please fill in all required fields');
       setLoading(false);
       return;
     }
 
+    // For new movies, poster must be uploaded. For edits, preview may already exist.
+    if (!preview) {
+      setError('Please upload a poster image');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Emit form data to parent for create/update handling
-      await onSuccess?.(formData);
+      // Poster can be either a data URL (legacy) or a public URL returned by our upload endpoint
+      const posterVal = String(formData.posterUrl || '');
+      const isDataUrl = posterVal.startsWith('data:');
+      const isPublicUrl = posterVal.startsWith('/') || posterVal.startsWith('http');
+      if (!(isDataUrl || isPublicUrl)) {
+        setError('Poster must be uploaded from your device');
+        setLoading(false);
+        return;
+      }
+
+  // Prepare sanitized payload: remove videoUrl if empty
+  const payload: any = { ...formData };
+  if (!payload.videoUrl) delete payload.videoUrl;
+
+  // Emit form data to parent for create/update handling
+  await onSuccess?.(payload);
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Server error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileChange = async (file?: File) => {
+    if (!file) return;
+    setError(null);
+    setLoading(true);
+    try {
+      // Upload raw file directly to server (no generation)
+      const filename = `${Date.now()}-${file.name}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const res = await fetch(`/api/upload?filename=${encodeURIComponent(filename)}`, {
+        method: 'POST',
+        body: file,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || 'Upload failed');
+      }
+
+      const json = await res.json();
+      const publicUrl = json.url as string;
+
+      setFormData({ ...formData, posterUrl: publicUrl });
+      setPreview(publicUrl);
+    } catch (err) {
+      console.error('Failed to upload image', err);
+      setError('Failed to upload image');
     } finally {
       setLoading(false);
     }
@@ -143,29 +196,27 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
             </div>
           </div>
 
-          {/* Video URL (optional) */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Video URL (Optional)</label>
-            <input
-              type="url"
-              value={formData.videoUrl}
-              onChange={e => setFormData({ ...formData, videoUrl: e.target.value })}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[#e5a00d] outline-none text-white transition-all"
-              placeholder="https://..."
-            />
-          </div>
+          {/* Video URL removed - videos are not stored via the form */}
 
-          {/* Poster URL (required) */}
+          {/* Poster: file upload or URL (required) */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Poster URL</label>
-            <input
-              required
-              type="url"
-              value={formData.posterUrl}
-              onChange={e => setFormData({ ...formData, posterUrl: e.target.value })}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[#e5a00d] outline-none text-white transition-all"
-              placeholder="https://..."
-            />
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Poster (Upload image or enter URL)</label>
+
+            <div className="flex gap-3 items-start">
+              <input
+                required={!movie}
+                type="file"
+                accept="image/*"
+                onChange={e => handleFileChange(e.target.files?.[0])}
+                className="text-sm text-white"
+              />
+
+              {preview && (
+                <div className="mt-0 w-48 h-64 rounded overflow-hidden border border-white/10">
+                  <img src={preview} alt="poster preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Buttons */}

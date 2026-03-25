@@ -1,60 +1,50 @@
+import { NextRequest, NextResponse } from "next/server";
 import { movieController } from "@/src/controller/movie.contoller";
-import { NextResponse } from "next/server";
 
-export async function GET(req: Request) {
+// ✅ GET ALL
+export async function GET(req: NextRequest) {
   try {
-    console.log("GET /api/movies called");
-
     const { searchParams } = new URL(req.url);
-    const search = searchParams.get("search");
 
-    let movies;
+    const query = {
+      search: searchParams.get("search") || undefined,
+      type: searchParams.get("type") || undefined,
+    };
 
-    if (search) {
-      console.log("Searching movies:", search);
-      movies = await movieController.searchMovies(search);
-    } else {
-      movies = await movieController.getMovies();
-    }
-
-    console.log("Movies fetched:", movies);
+    const movies = await movieController.getMovies(query);
 
     return NextResponse.json(movies);
   } catch (error) {
-    console.error("GET /api/movies error:", error);
-
-    return NextResponse.json(
-      {
-        message: "Server error",
-        error: error instanceof Error ? error.message : error,
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+// ✅ CREATE
+export async function POST(req: NextRequest) {
   try {
-    const data = await req.json();
+    const body = await req.json();
 
-    // If a poster URL is provided, check it's a valid URL string (don't require network reachability)
-    if (data.posterUrl) {
-      try {
-        new URL(String(data.posterUrl));
-      } catch (err) {
-        return NextResponse.json({ message: 'Poster URL must be a valid URL' }, { status: 400 });
+    // Basic validation
+    const required = ["title", "duration", "type", "subtitle"];
+    for (const key of required) {
+      if (!body || typeof body[key] !== "string" || !body[key].trim()) {
+        return NextResponse.json(
+          { error: `Missing or invalid field: ${key}` },
+          { status: 400 }
+        );
       }
     }
 
-    const movie = await movieController.createMovie(data);
+    // normalize year/poster if needed
+    if (body.year && typeof body.year === "string" && body.year.trim()) {
+      body.year = Number(body.year);
+    }
+
+    const movie = await movieController.createMovie(body);
 
     return NextResponse.json(movie);
   } catch (error) {
-    console.error("POST /api/movies error:", error);
-
-    return NextResponse.json(
-      { message: "Server error", error },
-      { status: 500 }
-    );
+    console.error('POST /api/movies error:', error);
+    return NextResponse.json({ error: "Failed to create" }, { status: 500 });
   }
 }

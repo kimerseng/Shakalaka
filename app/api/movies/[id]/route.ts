@@ -1,61 +1,67 @@
+import { NextRequest, NextResponse } from "next/server";
 import { movieController } from "@/src/controller/movie.contoller";
-import { NextResponse } from "next/server";
 
-// PUT /api/movies/:id
-export async function PUT(req: Request, context: any) {
+// GET /api/movies/:id - get movie by id
+export async function GET(req: NextRequest, context: any) {
   try {
-    // context.params may be a Promise in dev; handle both cases
-    let params = context?.params ?? context;
-    if (params && typeof params.then === 'function') {
-      params = await params;
+  const params = await context?.params;
+  const id = parseInt(params?.id, 10);
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     }
 
-    const id = params?.id ?? context?.id;
-    if (!id) throw new Error("Movie ID is missing");
-
-    const data = await req.json();
-
-    // Validate posterUrl if provided (only syntax)
-    if (data.posterUrl) {
-      try {
-        new URL(String(data.posterUrl));
-      } catch (err) {
-        return NextResponse.json({ success: false, message: 'Poster URL must be a valid URL' }, { status: 400 });
-      }
+    const movie = await movieController.getMovieById(id);
+    if (!movie) {
+      return NextResponse.json({ error: "Movie not found" }, { status: 404 });
     }
 
-    // pass id through as-is (string) to the controller/service
-    const movie = await movieController.updateMovie(id, data);
-
-    return NextResponse.json({ success: true, movie });
+    return NextResponse.json(movie);
   } catch (error) {
-    console.error("PUT /api/movies/:id error:", error);
-    return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch movie" }, { status: 500 });
   }
 }
 
-// DELETE /api/movies/:id
-export async function DELETE(req: Request, context: any) {
+// PUT /api/movies/:id - update movie
+export async function PUT(req: NextRequest, context: any) {
   try {
-    // handle promise-like params shape from Next dev validator
-    let params = context?.params ?? context;
-    if (params && typeof params.then === 'function') {
-      params = await params;
+  const params = await context?.params;
+  const id = parseInt(params?.id, 10);
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     }
 
-    const id = params?.id ?? context?.id;
-    if (!id) throw new Error("Movie ID is missing");
+    const body = await req.json();
 
-  await movieController.deleteMovie(id);
-    return NextResponse.json({ success: true, message: "Movie deleted successfully" });
+    const updated = await movieController.updateMovie(id, body);
+    if (!updated) {
+      return NextResponse.json({ error: "Movie not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updated);
   } catch (error) {
-    console.error("DELETE /api/movies/:id error:", error);
-    return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to update movie" }, { status: 500 });
+  }
+}
+
+// DELETE /api/movies/:id - delete movie
+export async function DELETE(req: NextRequest, context: any) {
+  try {
+  const params = await context?.params;
+  const id = parseInt(params?.id, 10);
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+    // Check existence first
+    const existing = await movieController.getMovieById(id);
+    if (!existing) {
+      return NextResponse.json({ error: "Movie not found" }, { status: 404 });
+    }
+
+    await movieController.deleteMovie(id);
+
+    // respond with 204 No Content
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to delete movie" }, { status: 500 });
   }
 }

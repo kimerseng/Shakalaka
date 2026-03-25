@@ -1,38 +1,31 @@
 import { movieService } from "@/src/services/movie.service";
 
-function normalizeMovie(row: any) {
-  if (!row) return row;
-  // prefer posterUrl if already present, otherwise map poster -> posterUrl
-  return {
-    ...row,
-    posterUrl: row.posterUrl ?? row.poster ?? null,
-  };
-}
-
 export const movieController = {
-
-  async getMovies() {
-    const rows = await movieService.getMovies();
-    return rows.map((r: any) => normalizeMovie(r));
+  async getMovies(query: any) {
+    return await movieService.getMovies(query);
   },
 
-  async searchMovies(search: string) {
-    const rows = await movieService.searchMovies(search);
-    return rows.map((r: any) => normalizeMovie(r));
+  async getMovieById(id: number) {
+    return await movieService.getMovieById(id);
   },
 
-  async createMovie(data: any) {
-    const row = await movieService.createMovie(data);
-    return normalizeMovie(row);
+  async createMovie(body: any) {
+    try {
+      console.log('controller.createMovie body:', body);
+      const result = await movieService.createMovie(body);
+      console.log('controller.createMovie result:', result);
+      return result;
+    } catch (err) {
+      console.error('controller.createMovie error:', err);
+      throw err;
+    }
   },
 
-  async updateMovie(id: string | number, data: any) {
-    const row = await movieService.updateMovie(id, data);
-    return normalizeMovie(row);
+  async updateMovie(id: number, body: any) {
+    return await movieService.updateMovie(id, body);
   },
 
-  async deleteMovie(id: string | number) {
+  async deleteMovie(id: number) {
     return await movieService.deleteMovie(id);
   },
-
 };
