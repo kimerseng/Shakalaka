@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
       { error: dev ? String(error) : 'Failed to fetch' },
       { status: 500 }
     );
+    
   }
 }
 
