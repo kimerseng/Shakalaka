@@ -8,9 +8,10 @@ const VideoCard = ({ movie }: { movie: Movie }) => {
   return (
     <div className="group cursor-pointer">
       <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-white/5 group-hover:border-white/20 transition-all">
-        {movie.posterUrl ? (
+        {movie.videoUrl ? (
           <video
             src={movie.videoUrl}
+            poster={movie.posterUrl}
             muted
             loop
             playsInline

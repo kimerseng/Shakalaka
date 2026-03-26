@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { Movie, SubtitleLanguage } from '@/src/types';
 import { MOVIE_TYPES } from '@/src/constants';
-import { compressImage } from '@/src/lib/image';
+// poster will be provided as a URL only
 
 interface MovieFormProps {
   movie?: Movie;
@@ -28,6 +28,8 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(movie?.posterUrl ?? null);
+  const [posterUrlInput, setPosterUrlInput] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,26 +43,42 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
       return;
     }
 
-    // For new movies, poster must be uploaded. For edits, preview may already exist.
-    if (!preview) {
-      setError('Please upload a poster image');
+    // Ensure we have a poster URL: prefer applied poster (formData.posterUrl),
+    // but if the user typed into the input and didn't press Enter/blur, use that.
+    let finalPoster = formData.posterUrl || '';
+    if (!finalPoster && posterUrlInput && posterUrlInput.trim()) {
+      finalPoster = posterUrlInput.trim();
+      // do a quick validation like applyPosterUrl
+      if (!(finalPoster.startsWith('/') || finalPoster.startsWith('http') || finalPoster.startsWith('data:'))) {
+        setError('Invalid poster URL. Use /uploads/... or a full http(s) URL');
+        setLoading(false);
+        return;
+      }
+      // update preview synchronously for UX
+      setPreview(finalPoster);
+    }
+
+    if (!finalPoster) {
+      setError('Please provide a poster URL');
       setLoading(false);
       return;
     }
 
     try {
       // Poster can be either a data URL (legacy) or a public URL returned by our upload endpoint
-      const posterVal = String(formData.posterUrl || '');
+      const posterVal = String(finalPoster || '');
       const isDataUrl = posterVal.startsWith('data:');
       const isPublicUrl = posterVal.startsWith('/') || posterVal.startsWith('http');
       if (!(isDataUrl || isPublicUrl)) {
-        setError('Poster must be uploaded from your device');
+        setError('Poster must be a valid URL starting with / or http(s)');
         setLoading(false);
         return;
       }
 
   // Prepare sanitized payload: remove videoUrl if empty
   const payload: any = { ...formData };
+  // ensure posterUrl is included in payload (in case user typed but didn't apply)
+  payload.posterUrl = finalPoster;
   if (!payload.videoUrl) delete payload.videoUrl;
 
   // Emit form data to parent for create/update handling
@@ -73,34 +91,50 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     }
   };
 
-  const handleFileChange = async (file?: File) => {
-    if (!file) return;
+  // apply a pasted URL as the poster (accepts relative or absolute URLs)
+  const applyPosterUrl = (url?: string) => {
+    if (!url || !url.trim()) return;
+    const trimmed = url.trim();
+    // simple validation: must look like a URL or a relative path
+    if (!(trimmed.startsWith('/') || trimmed.startsWith('http') || trimmed.startsWith('data:'))) {
+      setError('Invalid poster URL. Use /uploads/... or a full http(s) URL');
+      return;
+    }
+    setFormData({ ...formData, posterUrl: trimmed });
+    setPreview(trimmed);
+    setPosterUrlInput('');
     setError(null);
-    setLoading(true);
+  };
+
+  // handle file selection and upload to server endpoint (/api/upload)
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setUploading(true);
     try {
-      // Upload raw file directly to server (no generation)
-      const filename = `${Date.now()}-${file.name}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filename = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
       const res = await fetch(`/api/upload?filename=${encodeURIComponent(filename)}`, {
         method: 'POST',
+        headers: { 'Content-Type': file.type },
         body: file,
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || 'Upload failed');
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Upload failed');
 
-      const json = await res.json();
-      const publicUrl = json.url as string;
-
-      setFormData({ ...formData, posterUrl: publicUrl });
-      setPreview(publicUrl);
-    } catch (err) {
-      console.error('Failed to upload image', err);
-      setError('Failed to upload image');
+      // server returns { url: '/uploads/<filename>' }
+      setFormData({ ...formData, posterUrl: data.url });
+      setPreview(data.url);
+      setPosterUrlInput('');
+    } catch (err: any) {
+      setError(err?.message || 'Upload failed');
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
   };
+
+  // file upload removed: posters must be provided as URLs under /uploads/ or http(s)
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm overflow-y-auto">
@@ -197,25 +231,42 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
 
           {/* Video URL removed - videos are not stored via the form */}
 
-          {/* Poster: file upload or URL (required) */}
+          {/* Poster: URL only (required) */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Poster (Upload image or enter URL)</label>
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Poster (enter URL)</label>
 
-            <div className="flex gap-3 items-start">
-              <input
-                required={!movie}
-                type="file"
-                accept="image/*"
-                onChange={e => handleFileChange(e.target.files?.[0])}
-                className="text-sm text-white"
-              />
-
-              {preview && (
-                <div className="mt-0 w-48 h-64 rounded overflow-hidden border border-white/10">
-                  <img src={preview} alt="poster preview" className="w-full h-full object-cover" />
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="text-sm text-white"
+                  />
+                  {uploading && <span className="text-xs text-zinc-400">Uploading...</span>}
                 </div>
-              )}
-            </div>
+
+                {/* <div>
+                  <input
+                    type="text"
+                    placeholder="Or paste image URL (e.g. /uploads/xxx.jpg or https://...)"
+                    value={posterUrlInput}
+                    onChange={e => setPosterUrlInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyPosterUrl(posterUrlInput); } }}
+                    onBlur={() => applyPosterUrl(posterUrlInput)}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[#e5a00d] outline-none text-white transition-all text-sm"
+                  />
+                </div> */}
+
+                {/* <p className="text-xs text-zinc-500">Upload an image or paste a URL (server-stored images under <code>/uploads/</code> are recommended).</p> */}
+              </div>
+
+            {preview && (
+              <div className="mt-0 w-48 h-64 rounded overflow-hidden border border-white/10">
+                <img src={preview} alt="poster preview" className="w-full h-full object-cover" />
+              </div>
+            )}
+
           </div>
 
           {/* Buttons */}
