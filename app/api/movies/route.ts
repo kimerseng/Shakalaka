@@ -15,7 +15,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(movies);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
+    const dev = process.env.NODE_ENV !== 'production';
+    console.error('GET /api/movies error:', error);
+    return NextResponse.json(
+      { error: dev ? String(error) : 'Failed to fetch' },
+      { status: 500 }
+    );
   }
 }
 
@@ -45,6 +50,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(movie);
   } catch (error) {
     console.error('POST /api/movies error:', error);
-    return NextResponse.json({ error: "Failed to create" }, { status: 500 });
+    const dev = process.env.NODE_ENV !== 'production';
+    return NextResponse.json(
+      { error: dev ? String(error) : 'Failed to create' },
+      { status: 500 }
+    );
   }
 }
