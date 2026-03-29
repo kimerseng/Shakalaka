@@ -8,15 +8,15 @@ datasource db {
 }
 
 model Movie {
-  id         Int      @id @default(autoincrement())
-  title      String
-  duration   String
-  type       String
-  subtitle   String
-  poster     String?
-  year       Int?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  title     String
+  duration  String
+  type      String
+  subtitle  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  poster    String?
+  id        Int      @id @default(autoincrement())
+  year      Int?
 }
 
 model HeroContent {
@@ -33,8 +33,8 @@ model CustomSection {
   title         String
   content       String
   imageUrl      String
-  imagePosition String   // 'left' | 'right'
-  page          String   // 'home' | 'on-demand' | 'discover'
+  imagePosition String
+  page          String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
