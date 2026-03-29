@@ -56,6 +56,12 @@
       "namedRegex": "^/admin(?:/)?$"
     },
     {
+      "page": "/api/health",
+      "regex": "^/api/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
       "page": "/api/movies",
       "regex": "^/api/movies(?:/)?$",
       "routeKeys": {},
