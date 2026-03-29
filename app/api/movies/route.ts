@@ -1,60 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
-import { movieController } from "@/src/controller/movie.contoller";
+import { movieService } from '@/src/services/movie.service';
 
-// ✅ GET ALL
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
 
-    const query = {
-      search: searchParams.get("search") || undefined,
-      type: searchParams.get("type") || undefined,
-    };
+  const type = searchParams.get('type');
+  const search = searchParams.get('search');
 
-    const movies = await movieController.getMovies(query);
+  const movies = await movieService.getMovies({ type, search });
 
-    return NextResponse.json(movies);
-  } catch (error) {
-    const dev = process.env.NODE_ENV !== 'production';
-    console.error('GET /api/movies error:', error);
-    return NextResponse.json(
-      { error: dev ? String(error) : 'Failed to fetch' },
-      { status: 500 }
-    );
-    
-  }
+  return Response.json(movies);
 }
 
-// ✅ CREATE
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const body = await req.json();
-
-    // Basic validation
-    const required = ["title", "duration", "type", "subtitle"];
-    for (const key of required) {
-      if (!body || typeof body[key] !== "string" || !body[key].trim()) {
-        return NextResponse.json(
-          { error: `Missing or invalid field: ${key}` },
-          { status: 400 }
-        );
-      }
-    }
-
-    // normalize year/poster if needed
-    if (body.year && typeof body.year === "string" && body.year.trim()) {
-      body.year = Number(body.year);
-    }
-
-    const movie = await movieController.createMovie(body);
-
-    return NextResponse.json(movie);
+    const movie = await movieService.createMovie(body);
+    return Response.json(movie);
   } catch (error) {
-    console.error('POST /api/movies error:', error);
-    const dev = process.env.NODE_ENV !== 'production';
-    return NextResponse.json(
-      { error: dev ? String(error) : 'Failed to create' },
-      { status: 500 }
-    );
+    return Response.json({ error: 'Create failed' }, { status: 500 });
   }
 }

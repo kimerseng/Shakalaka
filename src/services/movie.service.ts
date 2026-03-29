@@ -1,5 +1,6 @@
-import prisma from "@/src/lib/prisma";
-import { Prisma } from "@prisma/client";
+// src/services/movieService.ts
+import prisma from '@/src/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 const ALLOWED_FIELDS = [
   "title",
@@ -18,25 +19,20 @@ function pickAllowed(data: any) {
       out[k] = data[k];
     }
   }
-  // If frontend sent posterUrl, map it to poster (DB column)
   if (Object.prototype.hasOwnProperty.call(out, "posterUrl")) {
     out.poster = out.posterUrl;
     delete out.posterUrl;
   }
-
   if (out.poster === undefined) delete out.poster;
-
   return out;
 }
 
 function mapDbMovieToDto(m: any) {
   if (!m) return m;
-  // convert DB model fields to frontend-friendly shape
   const dto: any = {
     ...m,
     posterUrl: m.poster ?? undefined,
   };
-  // normalize id/year to strings where the frontend expects them
   if (typeof dto.id === "number") dto.id = String(dto.id);
   if (dto.year !== undefined && dto.year !== null) dto.year = String(dto.year);
   return dto;
@@ -58,23 +54,15 @@ export const movieService = {
   },
 
   async createMovie(data: any) {
-    try {
-      console.log("service.createMovie payload (raw):", data);
-      const payload: any = pickAllowed(data);
-      console.log("service.createMovie payload (processed):", payload);
-      if (payload.year !== undefined && payload.year !== null) payload.year = Number(payload.year);
+    const payload = pickAllowed(data);
+    if (payload.year !== undefined && payload.year !== null) payload.year = Number(payload.year);
 
-      const created = await prisma.movie.create({ data: payload });
-      console.log("service.createMovie created:", created);
-      return mapDbMovieToDto(created);
-    } catch (err) {
-      console.error("service.createMovie error:", err);
-      throw err;
-    }
+    const created = await prisma.movie.create({ data: payload });
+    return mapDbMovieToDto(created);
   },
 
   async updateMovie(id: number, data: any) {
-    const payload: any = pickAllowed(data);
+    const payload = pickAllowed(data);
     if (payload.year !== undefined && payload.year !== null) payload.year = Number(payload.year);
 
     try {
