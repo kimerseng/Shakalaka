@@ -2,8 +2,14 @@
 import { NextRequest } from 'next/server';
 import { movieService } from '@/src/services/movie.service';
 
-export async function GET(req: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+async function resolveParams(context: any) {
+  // Next's context.params may be a Promise in some runtime types; normalize it.
+  return await Promise.resolve(context?.params);
+}
+
+export async function GET(req: NextRequest, context: any) {
+  const params = await resolveParams(context);
+  const id = params?.id;
   const movie = await movieService.getMovieById(Number(id));
 
   if (!movie) {
@@ -13,8 +19,9 @@ export async function GET(req: NextRequest, context: { params: { id: string } })
   return new Response(JSON.stringify(movie), { status: 200 });
 }
 
-export async function PUT(req: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function PUT(req: NextRequest, context: any) {
+  const params = await resolveParams(context);
+  const id = params?.id;
   const body = await req.json();
 
   const updated = await movieService.updateMovie(Number(id), body);
@@ -25,8 +32,9 @@ export async function PUT(req: NextRequest, context: { params: { id: string } })
   return new Response(JSON.stringify(updated), { status: 200 });
 }
 
-export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function DELETE(req: NextRequest, context: any) {
+  const params = await resolveParams(context);
+  const id = params?.id;
 
   const deleted = await movieService.deleteMovie(Number(id));
   if (!deleted) {
