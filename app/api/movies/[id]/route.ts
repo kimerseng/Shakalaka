@@ -1,45 +1,37 @@
+// app/api/movies/[id]/route.ts
+import { NextRequest } from 'next/server';
 import { movieService } from '@/src/services/movie.service';
 
-export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const movie = await movieService.getMovieById(Number(params.id));
+export async function GET(req: NextRequest, context: { params: { id: string } }) {
+  const { id } = context.params;
+  const movie = await movieService.getMovieById(Number(id));
 
   if (!movie) {
-    return Response.json({ error: 'Not found' }, { status: 404 });
+    return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
   }
 
-  return Response.json(movie);
+  return new Response(JSON.stringify(movie), { status: 200 });
 }
 
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const body = await req.json();
-    const updated = await movieService.updateMovie(Number(params.id), body);
+export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+  const { id } = context.params;
+  const body = await req.json();
 
-    if (!updated) {
-      return Response.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    return Response.json(updated);
-  } catch (error) {
-    return Response.json({ error: 'Update failed' }, { status: 500 });
+  const updated = await movieService.updateMovie(Number(id), body);
+  if (!updated) {
+    return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
   }
+
+  return new Response(JSON.stringify(updated), { status: 200 });
 }
 
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const deleted = await movieService.deleteMovie(Number(params.id));
+export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
+  const { id } = context.params;
 
+  const deleted = await movieService.deleteMovie(Number(id));
   if (!deleted) {
-    return Response.json({ error: 'Not found' }, { status: 404 });
+    return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
   }
 
-  return Response.json({ success: true });
+  return new Response(JSON.stringify({ success: true }), { status: 200 });
 }
