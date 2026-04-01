@@ -29,11 +29,15 @@ export async function POST(req: NextRequest) {
     const isVideo = file.type.startsWith('video/');
     const resourceType = isVideo ? 'video' : 'image';
 
+    // Sanitize filename and create safe public_id
+    const sanitizedName = file.name.split('.')[0].replace(/[^a-zA-Z0-9]/g, '');
+    const publicId = `${Date.now()}-${sanitizedName}`;
+
     // Upload to Cloudinary
     const result = await cloudinary.uploader.upload(dataUrl, {
       resource_type: resourceType,
       folder: folder,
-      public_id: `${Date.now()}-${file.name.split('.')[0]}`,
+      public_id: publicId,
       overwrite: true,
     });
 
