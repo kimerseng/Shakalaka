@@ -10,12 +10,28 @@ cloudinary.config({
 
 export async function POST(req: NextRequest) {
   try {
+    // Check file size limit (50MB max for Vercel)
+    const contentLength = req.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > 50 * 1024 * 1024) {
+      return NextResponse.json({ 
+        error: 'File too large. Maximum size is 50MB for video uploads.' 
+      }, { status: 413 });
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const folder = (formData.get('folder') as string) || 'movies';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    // Additional size check for videos
+    const isVideo = file.type.startsWith('video/');
+    if (isVideo && file.size > 50 * 1024 * 1024) {
+      return NextResponse.json({ 
+        error: 'Video file too large. Maximum size is 50MB.' 
+      }, { status: 413 });
     }
 
     // Convert file to buffer
@@ -26,7 +42,6 @@ export async function POST(req: NextRequest) {
     const dataUrl = `data:${file.type};base64,${base64String}`;
     
     // Determine resource type
-    const isVideo = file.type.startsWith('video/');
     const resourceType = isVideo ? 'video' : 'image';
 
     // Sanitize filename and create safe public_id
@@ -39,6 +54,7 @@ export async function POST(req: NextRequest) {
       folder: folder,
       public_id: publicId,
       overwrite: true,
+      chunk_size: 6000000, // 6MB chunks for large files
     });
 
     return NextResponse.json({
@@ -49,8 +65,21 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Upload error:', error);
+    
+    // Handle different error types
+    let errorMessage = 'Upload failed';
+    if (error instanceof Error) {
+      if (error.message.includes('Request Entity Too Large')) {
+        errorMessage = 'File too large. Maximum size is 50MB.';
+      } else if (error.message.includes('JSON')) {
+        errorMessage = 'Invalid file format. Please try a different file.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
     return NextResponse.json({ 
-      error: error instanceof Error ? error.message : 'Upload failed' 
+      error: errorMessage 
     }, { status: 500 });
   }
 }

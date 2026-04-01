@@ -126,6 +126,14 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     if (!file) return;
 
     setError(null);
+    
+    // Check file size (50MB limit for Vercel)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      setError('Video file too large. Maximum size is 50MB.');
+      return;
+    }
+
     setUploadingVideo(true);
     try {
       // Upload to server-side Cloudinary API
