@@ -5,12 +5,10 @@ import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { Movie, SubtitleLanguage } from '@/src/types';
 import { MOVIE_TYPES } from '@/src/constants';
-// poster will be provided as a URL only
 
 interface MovieFormProps {
   movie?: Movie;
   onClose: () => void;
-  // optional callback after successful submit - may return a promise
   onSuccess?: (data: Omit<Movie, 'id'>) => void | Promise<void>;
 }
 
@@ -20,8 +18,8 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     duration: movie?.duration || '',
     type: movie?.type || MOVIE_TYPES[0],
     subtitle: movie?.subtitle || 'EN',
-    videoUrl: movie?.videoUrl || '',       // optional
-    posterUrl: movie?.posterUrl || '',     // required
+    videoUrl: movie?.videoUrl || '',
+    posterUrl: movie?.posterUrl || '',
     year: movie?.year || '2024',
   });
 
@@ -30,31 +28,28 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
   const [preview, setPreview] = useState<string | null>(movie?.posterUrl ?? null);
   const [posterUrlInput, setPosterUrlInput] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [videoPreview, setVideoPreview] = useState<string | null>(movie?.videoUrl ?? null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Validate required fields
     if (!formData.title || !formData.duration || !formData.type || !formData.year) {
       setError('Please fill in all required fields');
       setLoading(false);
       return;
     }
 
-    // Ensure we have a poster URL: prefer applied poster (formData.posterUrl),
-    // but if the user typed into the input and didn't press Enter/blur, use that.
     let finalPoster = formData.posterUrl || '';
     if (!finalPoster && posterUrlInput && posterUrlInput.trim()) {
       finalPoster = posterUrlInput.trim();
-      // do a quick validation like applyPosterUrl
       if (!(finalPoster.startsWith('/') || finalPoster.startsWith('http') || finalPoster.startsWith('data:'))) {
-        setError('Invalid poster URL. Use /uploads/... or a full http(s) URL');
+        setError('Invalid poster URL');
         setLoading(false);
         return;
       }
-      // update preview synchronously for UX
       setPreview(finalPoster);
     }
 
@@ -65,24 +60,12 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     }
 
     try {
-      // Poster can be either a data URL (legacy) or a public URL returned by our upload endpoint
-      const posterVal = String(finalPoster || '');
-      const isDataUrl = posterVal.startsWith('data:');
-      const isPublicUrl = posterVal.startsWith('/') || posterVal.startsWith('http');
-      if (!(isDataUrl || isPublicUrl)) {
-        setError('Poster must be a valid URL starting with / or http(s)');
-        setLoading(false);
-        return;
-      }
+      const payload: any = { ...formData };
+      payload.posterUrl = finalPoster;
+      // Keep videoUrl even if empty - it's optional in the database
+      // if (!payload.videoUrl) delete payload.videoUrl;
 
-  // Prepare sanitized payload: remove videoUrl if empty
-  const payload: any = { ...formData };
-  // ensure posterUrl is included in payload (in case user typed but didn't apply)
-  payload.posterUrl = finalPoster;
-  if (!payload.videoUrl) delete payload.videoUrl;
-
-  // Emit form data to parent for create/update handling
-  await onSuccess?.(payload);
+      await onSuccess?.(payload);
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Server error');
@@ -91,13 +74,11 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     }
   };
 
-  // apply a pasted URL as the poster (accepts relative or absolute URLs)
   const applyPosterUrl = (url?: string) => {
     if (!url || !url.trim()) return;
     const trimmed = url.trim();
-    // simple validation: must look like a URL or a relative path
     if (!(trimmed.startsWith('/') || trimmed.startsWith('http') || trimmed.startsWith('data:'))) {
-      setError('Invalid poster URL. Use /uploads/... or a full http(s) URL');
+      setError('Invalid poster URL');
       return;
     }
     setFormData({ ...formData, posterUrl: trimmed });
@@ -106,7 +87,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     setError(null);
   };
 
-  // handle file selection and upload to server endpoint (/api/upload)
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -114,18 +94,25 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     setError(null);
     setUploading(true);
     try {
-      const filename = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
-      const res = await fetch(`/api/upload?filename=${encodeURIComponent(filename)}`, {
+      // Upload to server-side Cloudinary API
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('folder', 'movie-posters');
+      
+      const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': file.type },
-        body: file,
+        body: uploadFormData,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Upload failed');
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Upload failed');
+      }
 
-      // server returns { url: '/uploads/<filename>' }
-      setFormData({ ...formData, posterUrl: data.url });
-      setPreview(data.url);
+      // Use Cloudinary URL from server
+      setFormData({ ...formData, posterUrl: result.url || '' });
+      setPreview(result.url || null);
       setPosterUrlInput('');
     } catch (err: any) {
       setError(err?.message || 'Upload failed');
@@ -134,7 +121,38 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     }
   };
 
-  // file upload removed: posters must be provided as URLs under /uploads/ or http(s)
+  const handleVideoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setUploadingVideo(true);
+    try {
+      // Upload to server-side Cloudinary API
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('folder', 'movie-videos');
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      // Use Cloudinary URL from server
+      setFormData({ ...formData, videoUrl: result.url || '' });
+      setVideoPreview(result.url || null);
+    } catch (err: any) {
+      setError(err?.message || 'Upload failed');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm overflow-y-auto">
@@ -144,7 +162,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
         exit={{ opacity: 0, y: -50 }}
         className="relative mx-auto my-8 max-w-3xl w-full bg-[#1a1a1a] border border-white/10 rounded-3xl shadow-2xl p-6 sm:p-8"
       >
-        {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition-colors text-white"
@@ -152,7 +169,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
           <X size={24} />
         </button>
 
-        {/* Title */}
         <h2 className="text-2xl font-bold text-white mb-6">
           {movie ? 'Edit Movie' : 'Create New Movie'}
         </h2>
@@ -160,7 +176,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
-          {/* Movie Title */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Movie Title</label>
             <input
@@ -173,7 +188,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
             />
           </div>
 
-          {/* Duration + Year */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Duration</label>
@@ -200,7 +214,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
             </div>
           </div>
 
-          {/* Type + Subtitle */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Type</label>
@@ -229,47 +242,53 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
             </div>
           </div>
 
-          {/* Video URL removed - videos are not stored via the form */}
-
-          {/* Poster: URL only (required) */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Poster (enter URL)</label>
-
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="text-sm text-white"
-                  />
-                  {uploading && <span className="text-xs text-zinc-400">Uploading...</span>}
-                </div>
-
-                {/* <div>
-                  <input
-                    type="text"
-                    placeholder="Or paste image URL (e.g. /uploads/xxx.jpg or https://...)"
-                    value={posterUrlInput}
-                    onChange={e => setPosterUrlInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyPosterUrl(posterUrlInput); } }}
-                    onBlur={() => applyPosterUrl(posterUrlInput)}
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[#e5a00d] outline-none text-white transition-all text-sm"
-                  />
-                </div> */}
-
-                {/* <p className="text-xs text-zinc-500">Upload an image or paste a URL (server-stored images under <code>/uploads/</code> are recommended).</p> */}
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Poster Image</label>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="text-sm text-white"
+                />
+                {uploading && <span className="text-xs text-zinc-400">Uploading...</span>}
               </div>
+            </div>
 
             {preview && (
               <div className="mt-0 w-48 h-64 rounded overflow-hidden border border-white/10">
                 <img src={preview} alt="poster preview" className="w-full h-full object-cover" />
               </div>
             )}
-
           </div>
 
-          {/* Buttons */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Video File (Trailer)</label>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoSelect}
+                  className="text-sm text-white"
+                />
+                {uploadingVideo && <span className="text-xs text-zinc-400">Uploading video...</span>}
+              </div>
+            </div>
+
+            {videoPreview && (
+              <div className="mt-0 w-48 h-32 rounded overflow-hidden border border-white/10">
+                <video 
+                  src={videoPreview} 
+                  controls={false}
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <button
               type="button"

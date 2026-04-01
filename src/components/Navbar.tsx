@@ -8,9 +8,10 @@ import { usePathname } from "next/navigation";
 interface NavbarProps {
   onSearch?: (query: string) => void; // make it optional
   initialQuery?: string;
+  isSearching?: boolean;
 }
 
-const Navbar = ({ onSearch, initialQuery = "" }: NavbarProps) => {
+const Navbar = ({ onSearch, initialQuery = "", isSearching }: NavbarProps) => {
   const pathname = usePathname();
   const [query, setQuery] = useState(initialQuery);
 
@@ -51,6 +52,11 @@ const Navbar = ({ onSearch, initialQuery = "" }: NavbarProps) => {
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none"
               />
+              {isSearching && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-[#e5a00d] border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
             </div>
           </form>
 

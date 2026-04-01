@@ -9,6 +9,7 @@ const ALLOWED_FIELDS = [
   "subtitle",
   "poster",
   "posterUrl",
+  "videoUrl",
   "year",
 ];
 
@@ -32,6 +33,7 @@ function mapDbMovieToDto(m: any) {
   const dto: any = {
     ...m,
     posterUrl: m.poster ?? undefined,
+    videoUrl: m.videoUrl ?? undefined,
   };
   if (typeof dto.id === "number") dto.id = String(dto.id);
   if (dto.year !== undefined && dto.year !== null) dto.year = String(dto.year);

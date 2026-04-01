@@ -1,31 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const filenameParam = url.searchParams.get('filename');
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
+    const folder = (formData.get('folder') as string) || 'movies';
 
-    if (!filenameParam) {
-      return NextResponse.json({ error: 'Missing filename query param' }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    const filename = filenameParam.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    await fs.mkdir(uploadsDir, { recursive: true });
+    // Convert file to buffer
+    const buffer = await file.arrayBuffer();
+    
+    // Convert buffer to base64 data URL
+    const base64String = Buffer.from(buffer).toString('base64');
+    const dataUrl = `data:${file.type};base64,${base64String}`;
+    
+    // Determine resource type
+    const isVideo = file.type.startsWith('video/');
+    const resourceType = isVideo ? 'video' : 'image';
 
-    const arrayBuffer = await req.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(dataUrl, {
+      resource_type: resourceType,
+      folder: folder,
+      public_id: `${Date.now()}-${file.name.split('.')[0]}`,
+      overwrite: true,
+    });
 
-    const filepath = path.join(uploadsDir, filename);
-    await fs.writeFile(filepath, buffer);
+    return NextResponse.json({
+      success: true,
+      url: result.secure_url,
+      publicId: result.public_id,
+    });
 
-    // Return a URL relative to the public folder
-    const publicUrl = `/uploads/${filename}`;
-    return NextResponse.json({ url: publicUrl });
-  } catch (err) {
-    console.error('upload error:', err);
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+  } catch (error) {
+    console.error('Upload error:', error);
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Upload failed' 
+    }, { status: 500 });
   }
 }
