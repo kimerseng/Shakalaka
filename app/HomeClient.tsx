@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/src/components/Navbar";
 import MovieSection from "@/src/components/MovieSection";
 import Footer from "@/src/components/Footer";
+import PromotionSlider from "@/src/components/PromotionSlider";
 import { MOVIE_TYPES } from "@/src/constants";
 
 // ✅ FETCH FROM API
@@ -105,6 +106,10 @@ export default function HomeClient() {
       <Navbar onSearch={handleSearch} initialQuery={search} isSearching={isSearching} />
 
       <main className="p-4 max-w-[1400px] mx-auto">
+        {/* PROMOTION SLIDER */}
+        <div className="mb-8">
+          <PromotionSlider />
+        </div>
 
         {/* FILTER */}
         <div className="mb-8">
