@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { Search, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
+
 
 interface NavbarProps {
   onSearch?: (query: string) => void; // make it optional
@@ -35,12 +37,18 @@ const Navbar = ({ onSearch, initialQuery = "", isSearching }: NavbarProps) => {
     <nav className="sticky top-0 z-50 bg-[#0a0a0a]/90 backdrop-blur-md border-b border-white/5">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
-          <Link href="/" className="flex items-center gap-2 cursor-pointer">
-            <div className="w-8 h-8 bg-[#e5a00d] rounded flex items-center justify-center text-black font-bold">
-              S
-            </div>
-            <span className="text-2xl font-black tracking-tighter text-white">SHAKALAKA</span>
-          </Link>
+        <Link href="/" className="flex items-center gap-2 cursor-pointer">
+  <Image
+    src="/uploads/logo.png"   // correct path
+    alt="Shakalaka Logo"
+    width={200}
+    height={200}
+    className="rounded"
+  />
+  {/* <span className="text-2xl font-black tracking-tighter text-white">
+    SHAKALAKA
+  </span> */}
+</Link>
 
           <form onSubmit={handleSubmit} className="flex-1 max-w-md mx-8 hidden sm:block">
             <div className="relative group">
