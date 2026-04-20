@@ -161,15 +161,15 @@ export default function MoviePlayer({ movie, isOpen, onClose }: MoviePlayerProps
             />
           ) : movie.videoUrl ? (
             // Regular Video File
-            <video
-              ref={videoRef}
-              src={movie.videoUrl}
-              poster={movie.posterUrl}
-              className="w-full h-full object-contain max-h-screen"
-              onClick={togglePlay}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-            />
+          <video
+            ref={videoRef}
+            src={movie.videoUrl}
+            poster={movie.posterUrl}
+            className="w-full h-full object-contain max-h-screen"
+            onClick={togglePlay}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+          />
           ) : (
             // No Video - Show Poster Only
             <img 
@@ -216,9 +216,9 @@ export default function MoviePlayer({ movie, isOpen, onClose }: MoviePlayerProps
 
           {/* Controls Overlay - Only show for non-YouTube videos */}
           {!getYoutubeVideoId(movie.videoUrl) && (
-            <div className={`absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/50 transition-opacity duration-300 ${
-              showControls ? 'opacity-100' : 'opacity-0'
-            }`}>
+          <div className={`absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/50 transition-opacity duration-300 ${
+            showControls ? 'opacity-100' : 'opacity-0'
+          }`}>
             {/* Top Controls */}
             <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start">
               <div className="flex items-center gap-4">
@@ -249,6 +249,17 @@ export default function MoviePlayer({ movie, isOpen, onClose }: MoviePlayerProps
                 >
                   <X size={20} className="text-white" />
                 </button>
+                
+                {/* YouTube Button */}
+                {getYoutubeVideoId(movie.videoUrl) && (
+                  <button
+                    onClick={openYoutubeInNewTab}
+                    className="p-2 bg-red-600 backdrop-blur-sm rounded-full hover:bg-red-700 transition-colors"
+                    title="Watch on YouTube"
+                  >
+                    <ExternalLink size={20} className="text-white" />
+                  </button>
+                )}
                 
                 {/* YouTube Button */}
                 {getYoutubeVideoId(movie.videoUrl) && (

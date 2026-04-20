@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Movie, SubtitleLanguage } from '@/src/types';
 import { MOVIE_TYPES } from '@/src/constants';
@@ -9,11 +9,11 @@ import { MOVIE_TYPES } from '@/src/constants';
 interface MovieFormProps {
   movie?: Movie;
   onClose: () => void;
-  onSuccess?: (data: Omit<Movie, 'id'>) => void | Promise<void>;
+  onSuccess?: (movie: Partial<Movie>) => void;
 }
 
-const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
-  const [formData, setFormData] = useState<Omit<Movie, 'id'>>({
+export default function MovieForm({ movie, onClose, onSuccess }: MovieFormProps) {
+  const [formData, setFormData] = useState({
     title: movie?.title || '',
     duration: movie?.duration || '',
     type: movie?.type || MOVIE_TYPES[0],
@@ -67,8 +67,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     try {
       const payload: any = { ...formData };
       payload.posterUrl = finalPoster;
-      // Keep videoUrl even if empty - it's optional in the database
-      // if (!payload.videoUrl) delete payload.videoUrl;
 
       await onSuccess?.(payload);
       onClose();
@@ -76,57 +74,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
       setError(err?.message || 'Server error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const applyPosterUrl = (url?: string) => {
-    if (!url || !url.trim()) return;
-    const trimmed = url.trim();
-    if (!(trimmed.startsWith('/') || trimmed.startsWith('http') || trimmed.startsWith('data:'))) {
-      setError('Invalid poster URL');
-      return;
-    }
-    setFormData({ ...formData, posterUrl: trimmed });
-    setPreview(trimmed);
-    setPosterUrlInput('');
-    setError(null);
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setError(null);
-    setUploading(true);
-    try {
-      // Upload to server-side Cloudinary API
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
-      uploadFormData.append('folder', 'movie-posters');
-      
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: uploadFormData,
-      });
-      
-      const result = await response.json();
-      
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Upload failed');
-      }
-
-      // Use Cloudinary URL from server
-      setFormData({ ...formData, posterUrl: result.url || '' });
-      setPreview(result.url || null);
-      setPosterUrlInput('');
-      // Don't affect video preview when uploading poster
-      if (videoSource === 'youtube') {
-        setVideoPreview(null);
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Upload failed');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -147,13 +94,44 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     setError(null);
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setUploading(true);
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('folder', 'movie-posters');
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      setFormData({ ...formData, posterUrl: result.url || '' });
+      setPreview(result.url || null);
+      setPosterUrlInput('');
+    } catch (err: any) {
+      setError(err?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleVideoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setError(null);
     
-    // Check file size (50MB limit for Vercel)
     const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
       setError('Video file too large. Maximum size is 50MB.');
@@ -162,7 +140,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
 
     setUploadingVideo(true);
     try {
-      // Upload to server-side Cloudinary API
       const uploadFormData = new FormData();
       uploadFormData.append('file', file);
       uploadFormData.append('folder', 'movie-videos');
@@ -178,7 +155,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
         throw new Error(result.error || 'Upload failed');
       }
 
-      // Use Cloudinary URL from server
       setFormData({ ...formData, videoUrl: result.url || '' });
       setVideoPreview(result.url || null);
       setVideoSource('upload');
@@ -192,7 +168,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
   const handleYoutubeUrlChange = (url: string) => {
     setYoutubeUrl(url);
     
-    // Extract YouTube video ID and create embed URL
     if (url && url.includes('youtube.com')) {
       const videoId = extractYoutubeId(url);
       if (videoId) {
@@ -202,12 +177,10 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
         setVideoSource('youtube');
       }
     } else if (!url) {
-      // Clear YouTube URL
       setFormData({ ...formData, videoUrl: '' });
       setVideoPreview(null);
       setVideoSource('upload');
     }
-    // Don't affect poster preview when changing YouTube URL
   };
 
   const extractYoutubeId = (url: string): string | null => {
@@ -219,8 +192,6 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
     setVideoSource(source);
     if (source === 'upload') {
       setYoutubeUrl('');
-      setFormData({ ...formData, videoUrl: videoPreview || '' });
-    } else {
       setVideoPreview(null);
     }
   };
@@ -436,15 +407,20 @@ const MovieForm = ({ movie, onClose, onSuccess }: MovieFormProps) => {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-3 bg-[#e5a00d] text-black font-bold rounded-xl hover:scale-[1.02] transition-all shadow-lg shadow-[#e5a00d]/20"
+              className="flex-1 px-4 py-3 bg-[#e5a00d] text-black font-bold rounded-xl hover:bg-[#e5a00d]/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? 'Saving...' : movie ? 'Save Changes' : 'Create Movie'}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                movie ? 'Update Movie' : 'Create Movie'
+              )}
             </button>
           </div>
         </form>
       </motion.div>
     </div>
   );
-};
-
-export default MovieForm;
+}
